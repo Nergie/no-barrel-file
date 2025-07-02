@@ -2,11 +2,22 @@
   "compilerOptions": {
     "baseUrl": "./",
     "jsx": "preserve",
+    "lib": [
+      "esnext",
+      "dom"
+    ],
     "paths": {
       "@barrel-basic/*": ["./barrel-basic/*"],
       "@barrel-circular/*": ["./barrel-circular/*"],
       "@barrel-nested/*": ["./barrel-nested/*"],
       "@ignored/*": ["./ignored/*"],
+      "@barrel-very-nested/*": ["./barrel-very-nested/*"],
+      "@feature-a/*": ["./barrel-path-alias-complex/libs/feature-a/src/*"],
+      "@feature-b/*": ["./barrel-path-alias-complex/libs/feature-b/src/*"],
+      "@shared/*": ["./barrel-path-alias-complex/libs/shared/src/*"],
+      "@utils/*": ["./barrel-path-alias-complex/utils/*"],
+      "~components/*": ["./barrel-path-alias-complex/components/*"],
+      "~types/*": ["./barrel-path-alias-complex/types/*"]
     }
   }
 }
