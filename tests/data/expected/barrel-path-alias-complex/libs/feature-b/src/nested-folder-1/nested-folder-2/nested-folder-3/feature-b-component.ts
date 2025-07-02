@@ -1,5 +1,5 @@
 // Import from feature-a using path alias - this creates a cross-dependency
-import { FeatureAResponse } from "@feature-a/feature-a-types"
+import { FeatureAResponse } from "@feature-a/feature-a-types";
 
 export interface FeatureBProps {
   title: string;

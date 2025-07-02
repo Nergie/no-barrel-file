@@ -1,31 +1,16 @@
 // Complex import scenario using multiple path aliases and barrel files
-import { FeatureAService } from "./barrel-path-alias-complex/libs/feature-a/src/feature-a-service";
-import { FeatureAConfig } from "./barrel-path-alias-complex/libs/feature-a/src/feature-a-types";
-import { FeatureBComponent } from "./barrel-path-alias-complex/libs/feature-b/src/nested-folder-1/nested-folder-2/nested-folder-3/feature-b-component";
-import { featureBUtils } from "./barrel-path-alias-complex/libs/feature-b/src/nested-folder-1/nested-folder-2/feature-b-utils";
-import { 
-  APP_NAME, 
-  API_VERSION, 
-  FEATURE_FLAGS
-} from "./barrel-path-alias-complex/libs/shared/src/shared-constants";
-import {
-  User,
-  UserRole,
-  BaseEntity
-} from "./barrel-path-alias-complex/libs/shared/src/shared-interfaces";
-import { Logger, LogLevel } from "./barrel-path-alias-complex/utils/logger";
-import { HttpClient } from "./barrel-path-alias-complex/utils/http-client";
-import { Button, Modal } from "./barrel-path-alias-complex/components/ui";
-import { Form, FormField } from "./barrel-path-alias-complex/components/forms";
-import { 
-  AppState, 
-  AppConfig, 
-  AppEvent
-} from "./barrel-path-alias-complex/types/app-types";
-import {
-  PaginatedResponse,
-  ApiRequest 
-} from "./barrel-path-alias-complex/types/api-types";
+import { FeatureAService } from "@feature-a/feature-a-service";
+import { FeatureAConfig } from "@feature-a/feature-a-types";
+import { FeatureBComponent } from "@feature-b/nested-folder-1/nested-folder-2/nested-folder-3/feature-b-component";
+import { featureBUtils } from "@feature-b/nested-folder-1/nested-folder-2/feature-b-utils";
+import { APP_NAME, API_VERSION, FEATURE_FLAGS } from "@shared/shared-constants";
+import { User, UserRole, BaseEntity } from "@shared/shared-interfaces";
+import { Logger, LogLevel } from "@utils/logger";
+import { HttpClient } from "@utils/http-client";
+import { Button, Modal } from "~components/ui";
+import { Form, FormField } from "~components/forms";
+import { AppState, AppConfig, AppEvent } from "~types/app-types"
+import { PaginatedResponse, ApiRequest } from "~types/api-types";
 
 // Usage examples demonstrating complex interactions
 class Application {
