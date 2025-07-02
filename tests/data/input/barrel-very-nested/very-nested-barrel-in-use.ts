@@ -1,14 +1,18 @@
 // Import from deeply nested barrel file
 import { 
-  DEEPLY_NESTED_CONSTANT, 
-  DeepestClass, 
-  deepestFunction,
   DeepType,
   DeepEnum,
   createLevel2Component,
   level1Util,
   Level1Class
+} from "@barrel-very-nested/index";
+// Importing multiple exports from the same barrel file in different ways
+import { 
+  DEEPLY_NESTED_CONSTANT, 
+  DeepestClass, 
+  deepestFunction,
 } from "@barrel-very-nested";
+
 
 // Usage examples
 const constant = DEEPLY_NESTED_CONSTANT;

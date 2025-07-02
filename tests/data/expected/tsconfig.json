@@ -7,8 +7,11 @@
       "dom"
     ],
     "paths": {
+      "@barrel-basic": ["./barrel-basic/index.ts"],
       "@barrel-basic/*": ["./barrel-basic/*"],
+      "@barrel-circular": ["./barrel-circular/index.ts"],
       "@barrel-circular/*": ["./barrel-circular/*"],
+      "@barrel-nested": ["./barrel-nested/index.ts"],
       "@barrel-nested/*": ["./barrel-nested/*"],
       "@ignored/*": ["./ignored/*"],
       "@barrel-very-nested/*": ["./barrel-very-nested/*"],
