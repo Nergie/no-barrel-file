@@ -92,3 +92,7 @@ func (resolver *Resolver) AliasPath(path string) Alias {
 		FullPath:  path,
 	}
 }
+
+func (resolver *Resolver) IsAliasPath(path string) bool {
+	return strings.HasPrefix(path, "@") || strings.HasPrefix(path, "~")
+}

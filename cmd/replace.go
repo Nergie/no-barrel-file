@@ -41,6 +41,23 @@ func NewReplaceConfig(cmd *cobra.Command) ReplaceConfig {
 	}
 }
 
+func normalizeImportPath(path string, extensions []string) string {
+	// Remove various index file patterns using configured extensions
+	for _, ext := range extensions {
+		indexPattern := "/index" + ext
+		if strings.HasSuffix(path, indexPattern) {
+			return strings.TrimSuffix(path, indexPattern)
+		}
+	}
+
+	// Also handle bare /index
+	if strings.HasSuffix(path, "/index") {
+		return strings.TrimSuffix(path, "/index")
+	}
+
+	return path
+}
+
 var replaceCmd = &cobra.Command{
 	Use:   "replace",
 	Short: "Replace barrel files imports",
@@ -96,9 +113,9 @@ func replaceBarrelImports(cmd *cobra.Command, config ReplaceConfig) int {
 
 			importNames := strings.Split(matches[1], ",")
 			quoteSymbol := matches[2]
-			importPath := matches[3]
+			importPath := normalizeImportPath(matches[3], config.extensions)
 			endSymbol := matches[4]
-			isAliasPath := strings.HasPrefix(importPath, "@")
+			isAliasPath := resolver.IsAliasPath(importPath)
 			var resolvedPathKey string
 			if isAliasPath {
 				resolvedPathKey = importPath

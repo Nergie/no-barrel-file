@@ -23,6 +23,6 @@ func TestReplaceCommand(t *testing.T) {
 	output, err := tests.ExecuteCommand(rootCmd, "replace", "--root-path", initialRootPath, "--ignore-paths", "ignored", "--alias-config-path", "tsconfig.json")
 
 	assert.NoError(t, err)
-	assert.Contains(t, output, "4 files updated\n")
+	assert.Contains(t, output, "11 files updated\n")
 	tests.CompareDirs(t, initialRootPath, expectedRootPath)
 }

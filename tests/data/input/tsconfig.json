@@ -2,11 +2,29 @@
   "compilerOptions": {
     "baseUrl": "./",
     "jsx": "preserve",
+    "lib": [
+      "esnext",
+      "dom"
+    ],
     "paths": {
       "@barrel-basic/*": ["./barrel-basic/*"],
       "@barrel-circular/*": ["./barrel-circular/*"],
       "@barrel-nested/*": ["./barrel-nested/*"],
       "@ignored/*": ["./ignored/*"],
+      "@barrel-very-nested/*": ["./barrel-very-nested/*"],
+      "@barrel-very-nested": ["./barrel-very-nested/index.ts"],
+      "@feature-a/*": ["./barrel-path-alias-complex/libs/feature-a/src/*"],
+      "@feature-a": ["./barrel-path-alias-complex/libs/feature-a/src/index.ts"],
+      "@feature-b/*": ["./barrel-path-alias-complex/libs/feature-b/src/*"],
+      "@feature-b": ["./barrel-path-alias-complex/libs/feature-b/src/index.ts"],
+      "@shared": ["./barrel-path-alias-complex/libs/shared/src/index.ts"],
+      "@shared/*": ["./barrel-path-alias-complex/libs/shared/src/*"],
+      "@utils": ["./barrel-path-alias-complex/utils/index.ts"],
+      "@utils/*": ["./barrel-path-alias-complex/utils/*"],
+      "~components": ["./barrel-path-alias-complex/components/index.ts"],
+      "~components/*": ["./barrel-path-alias-complex/components/*"],
+      "~types": ["./barrel-path-alias-complex/types/index.ts"],
+      "~types/*": ["./barrel-path-alias-complex/types/*"]
     }
   }
 }
