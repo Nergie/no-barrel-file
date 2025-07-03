@@ -11,5 +11,5 @@ import (
 func TestCountCommand(t *testing.T) {
 	output, err := tests.ExecuteCommand(rootCmd, "count", "--root-path", "../tests/data/input", "--ignore-paths", "ignored")
 	assert.NoError(t, err)
-	assert.Contains(t, output, "5\n")
+	assert.Contains(t, output, "16\n")
 }

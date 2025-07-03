@@ -5,6 +5,7 @@ import { level1Util, Level1Class } from "@barrel-very-nested/level1/utils";
 // Importing multiple exports from the same barrel file in different ways
 import { DEEPLY_NESTED_CONSTANT, DeepestClass, deepestFunction } from "@barrel-very-nested/level1/level2/level3/level4/final-level";
 
+
 // Usage examples
 const constant = DEEPLY_NESTED_CONSTANT;
 const deepClass = new DeepestClass();

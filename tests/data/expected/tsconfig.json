@@ -7,7 +7,7 @@
       "dom"
     ],
     "paths": {
-     "@barrel-basic/*": ["./barrel-basic/*"],
+      "@barrel-basic/*": ["./barrel-basic/*"],
       "@barrel-circular/*": ["./barrel-circular/*"],
       "@barrel-nested/*": ["./barrel-nested/*"],
       "@ignored/*": ["./ignored/*"],

@@ -42,24 +42,20 @@ func NewReplaceConfig(cmd *cobra.Command) ReplaceConfig {
 }
 
 func normalizeImportPath(path string, extensions []string) string {
-    // Remove various index file patterns using configured extensions
-    for _, ext := range extensions {
-        indexPattern := "/index" + ext
-        if strings.HasSuffix(path, indexPattern) {
-            return strings.TrimSuffix(path, indexPattern)
-        }
-    }
-    
-    // Also handle bare /index
-    if strings.HasSuffix(path, "/index") {
-        return strings.TrimSuffix(path, "/index")
-    }
-    
-    return path
-}
+	// Remove various index file patterns using configured extensions
+	for _, ext := range extensions {
+		indexPattern := "/index" + ext
+		if strings.HasSuffix(path, indexPattern) {
+			return strings.TrimSuffix(path, indexPattern)
+		}
+	}
 
-func (resolver *Resolver) IsAliasPath(path string) bool {
-	return strings.HasPrefix(path, "@") || strings.HasPrefix(path, "~")
+	// Also handle bare /index
+	if strings.HasSuffix(path, "/index") {
+		return strings.TrimSuffix(path, "/index")
+	}
+
+	return path
 }
 
 var replaceCmd = &cobra.Command{
@@ -117,7 +113,7 @@ func replaceBarrelImports(cmd *cobra.Command, config ReplaceConfig) int {
 
 			importNames := strings.Split(matches[1], ",")
 			quoteSymbol := matches[2]
-            importPath := normalizeImportPath(matches[3], config.extensions)
+			importPath := normalizeImportPath(matches[3], config.extensions)
 			endSymbol := matches[4]
 			isAliasPath := resolver.IsAliasPath(importPath)
 			var resolvedPathKey string

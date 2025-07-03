@@ -9,7 +9,7 @@ import { Logger, LogLevel } from "@utils/logger";
 import { HttpClient } from "@utils/http-client";
 import { Button, Modal } from "~components/ui";
 import { Form, FormField } from "~components/forms";
-import { AppState, AppConfig, AppEvent } from "~types/app-types"
+import { AppState, AppConfig, AppEvent } from "~types/app-types";
 import { PaginatedResponse, ApiRequest } from "~types/api-types";
 
 // Usage examples demonstrating complex interactions
