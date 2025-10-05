@@ -14,8 +14,8 @@ import (
 var (
 	// export * from './module' || export * as ModuleName from './module' || export type { ModuleName } from './module' || export { ModuleName } from './module'
 	ExportLineWithPathRX = regexp.MustCompile(`(?i)export\s+(\*\s+from|\*\s+as\s+\w+\s+from|type\s+{[^}]+}\s+from|{[^}]+}\s+from)\s+['"]([^'"]+)['"]`)
-	// export default class ModuleName || export class ModuleName || export function ModuleName || export const ModuleName || export let ModuleName || export enum ModuleName || export type ModuleName || export interface ModuleName || export { ModuleName }
-	ExportLineWithModuleRX = regexp.MustCompile(`export\s+(?:default\s+)?(?:class|function|const|let|var|enum|type|interface)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)|\bexport\s+\{[^}]*\b([a-zA-Z_$][a-zA-Z0-9_$]*)\b[^}]*\}`)
+	// export default class ModuleName || export class ModuleName || export function ModuleName || export const ModuleName || export let ModuleName || export enum ModuleName || export type ModuleName || export interface ModuleName || export { ModuleName } || export type { ModuleName }
+	ExportLineWithModuleRX = regexp.MustCompile(`export\s+(?:default\s+)?(?:class|function|const|let|var|enum|type|interface)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)|\bexport\s+(?:type\s+)?\{[^}]*\b([a-zA-Z_$][a-zA-Z0-9_$]*)\b[^}]*\}`)
 )
 
 type Parser struct {
@@ -84,6 +84,9 @@ func (parser *Parser) BarrelMaps(resolver resolver.Resolver) (map[string]struct{
 						barrelPathExistenceMap[barrelDir] = struct{}{}
 
 						moduleName := match[1]
+						if moduleName == "" && len(match) > 2 {
+							moduleName = match[2]
+						}
 						aliasKey := filepath.Join(barrelDirAlias.FullPath, moduleName)
 						directKey := filepath.Join(barrelDir, moduleName)
 						moduleExtension := filepath.Ext(modulePath)

@@ -3,7 +3,7 @@ import { BASIC_CONST_SINGLE_EXPORT, BASIC_LET_SINGLE_EXPORT } from "@barrel-basi
 import { BasicClass } from "@barrel-basic/classes";
 import { BasicEnum } from "@barrel-basic/enums";
 import { BasicInterface, type BasicType } from "@barrel-basic/types";
-import { ReExportedBasicConstToExport, ReExportedBasicType, RenamedBasicClass } from "@barrel-basic";
+import { ReExportedBasicConstToExport, ReExportedBasicType, RenamedBasicClass } from "@barrel-basic/re-exports";
 import { basicFunction as basicFunctionWithAs, basicFunction } from "@barrel-basic/functions";
 
 import { CircularA } from '@barrel-circular/circular-a';
