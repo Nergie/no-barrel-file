@@ -9,3 +9,5 @@ export type { ReExportedBasicType };
 
 const ReExportedBasicConstToExport = 42;
 export { ReExportedBasicConstToExport };
+
+export * as DefaultExported from "./default-export";

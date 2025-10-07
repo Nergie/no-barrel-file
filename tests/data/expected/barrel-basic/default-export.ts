@@ -1,0 +1,1 @@
+export default { Hello: "Kia ora" };
