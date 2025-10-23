@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -81,7 +82,8 @@ func CompareDirs(t *testing.T, dir1, dir2 string) {
 		file2 := files2[i]
 
 		// Compare if file names match
-		assert.Equal(t, file1.Name(), file2.Name())
+		// expected (dir2) vs actual (dir1)
+		assert.Equal(t, file2.Name(), file1.Name())
 
 		// Compare if files are directories or files
 		if file1.IsDir() {
@@ -95,7 +97,17 @@ func CompareDirs(t *testing.T, dir1, dir2 string) {
 			content2, err := os.ReadFile(filepath.Join(dir2, file2.Name()))
 			assert.NoError(t, err)
 
-			assert.Equal(t, string(content1), string(content2))
+			normalize := func(s string) string {
+				// Normalize all line endings to LF for deterministic comparison across OSes
+				s = strings.ReplaceAll(s, "\r\n", "\n")
+				s = strings.ReplaceAll(s, "\r", "\n")
+				return s
+			}
+
+			// actual and expected paths for clearer messages
+			p1 := filepath.Join(dir1, file1.Name()) // actual
+			p2 := filepath.Join(dir2, file2.Name()) // expected
+			assert.Equalf(t, normalize(string(content2)), normalize(string(content1)), "mismatch: expected %s != actual %s", p2, p1)
 		}
 	}
 }

@@ -32,3 +32,9 @@ go.work.sum
 # MacOs
 .DS_Store
 .vscode
+/.idea/
+/.tmp-repro/
+/tests/sandbox/
+/tmp-e2e/
+/tmp-run/
+/no-barrel-file.iml

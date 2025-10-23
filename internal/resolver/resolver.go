@@ -54,15 +54,19 @@ func getAliasPaths(rootPath string, tsConfigPath *string) map[string]string {
 		return nil
 	}
 
+	// Determine baseUrlPath relative to the tsconfig directory
+	cfgDir := filepath.Dir(tsConfigFullPath)
+	var baseUrlPath string
 	if tsConfig.CompilerOptions.BaseUrl == "" {
-		tsConfig.CompilerOptions.BaseUrl = filepath.Dir(tsConfigFullPath)
+		baseUrlPath = cfgDir
+	} else {
+		baseUrlPath = filepath.Join(cfgDir, tsConfig.CompilerOptions.BaseUrl)
 	}
-	baseUrlPath := filepath.Dir(filepath.Join(tsConfigFullPath, tsConfig.CompilerOptions.BaseUrl))
 
 	for alias, paths := range tsConfig.CompilerOptions.Paths {
 		if len(paths) > 0 {
 			for _, path := range paths {
-				realPath := filepath.Join(baseUrlPath, filepath.Dir(path))
+				realPath := filepath.ToSlash(filepath.Join(baseUrlPath, filepath.Dir(path)))
 				aliasPaths[realPath] = strings.TrimSuffix(alias, "/*")
 			}
 		}
@@ -77,9 +81,13 @@ type Alias struct {
 }
 
 func (resolver *Resolver) AliasPath(path string) Alias {
+	p := filepath.ToSlash(path)
 	for realPath, alias := range resolver.aliasPaths {
-		if strings.HasPrefix(path, realPath) {
-			fullPath := filepath.Join(alias, strings.TrimPrefix(path, realPath))
+		rp := filepath.ToSlash(realPath)
+		if p == rp || strings.HasPrefix(p, rp+"/") {
+			remainder := strings.TrimPrefix(p, rp)
+			remainder = strings.TrimPrefix(remainder, "/")
+			fullPath := filepath.ToSlash(filepath.Join(alias, remainder))
 			return Alias{
 				ShortPath: alias,
 				FullPath:  fullPath,
@@ -88,11 +96,39 @@ func (resolver *Resolver) AliasPath(path string) Alias {
 	}
 
 	return Alias{
-		ShortPath: path,
-		FullPath:  path,
+		ShortPath: p,
+		FullPath:  p,
 	}
 }
 
 func (resolver *Resolver) IsAliasPath(path string) bool {
-	return strings.HasPrefix(path, "@") || strings.HasPrefix(path, "~")
+	if strings.HasPrefix(path, "@") || strings.HasPrefix(path, "~") {
+		return true
+	}
+	for _, alias := range resolver.aliasPaths {
+		if alias == "" {
+			continue
+		}
+		if path == alias || strings.HasPrefix(path, alias+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// ResolveAliasImport resolves an alias import path (like "ui/components/Button")
+// to its real filesystem path based on tsconfig paths. Returns the real path and true on success.
+func (resolver *Resolver) ResolveAliasImport(importPath string) (string, bool) {
+	for realPath, alias := range resolver.aliasPaths {
+		if alias == "" {
+			continue
+		}
+		if importPath == alias || strings.HasPrefix(importPath, alias+"/") {
+			remainder := strings.TrimPrefix(importPath, alias)
+			remainder = strings.TrimPrefix(remainder, "/")
+			full := filepath.ToSlash(filepath.Join(filepath.ToSlash(realPath), remainder))
+			return filepath.ToSlash(full), true
+		}
+	}
+	return "", false
 }
