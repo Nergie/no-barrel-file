@@ -9,7 +9,7 @@ import (
 
 type BarrelResolvedPath struct {
 	ExistenceMap      map[string]struct{}
-	ModuleResolverMap map[string]string
+	ModuleResolverMap map[string]parser.ModuleResolverMapValue
 }
 
 func NewBarrelResolvedPath(parser parser.Parser, resolver resolver.Resolver) BarrelResolvedPath {
@@ -25,7 +25,7 @@ func (b *BarrelResolvedPath) IsResolved(path string) bool {
 	return exists
 }
 
-func (b *BarrelResolvedPath) ResolveModuleName(path string, moduleName string) (string, bool) {
+func (b *BarrelResolvedPath) ResolveModuleName(path string, moduleName string) (parser.ModuleResolverMapValue, bool) {
 	resolvedPath, exists := b.ModuleResolverMap[filepath.Join(path, moduleName)]
 	return resolvedPath, exists
 }

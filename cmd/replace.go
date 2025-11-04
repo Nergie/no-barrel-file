@@ -18,7 +18,7 @@ import (
 
 var (
 	// import type { ModuleName } from 'module' || import { ModuleName } from 'module'
-	NamedImportLineRX = regexp.MustCompile(`import\s+(type {[^}]+}|{[^}]+})\s+from\s+(['"])([^'"]+)['"](;?)`)
+	NamedImportLineRX = regexp.MustCompile(`import\s+(type\s+{[^}]+}|{[^}]+})\s+from\s+(['"])([^'"]+)['"](;?)`)
 	TypeImportRX      = regexp.MustCompile(`type\s+[{]?\s*(\w+)`) // type { exportName }
 	AliasImportRX     = regexp.MustCompile(`(\w+)\s+as\s+\w+`)    // exportName as Alias
 )
@@ -137,7 +137,8 @@ func replaceBarrelImports(cmd *cobra.Command, config ReplaceConfig) int {
 					continue
 				}
 				moduleName := getModuleName(importName)
-				resolvedModulePath, exists := barrelResolvedPaths.ResolveModuleName(resolvedPathKey, moduleName)
+				moduleResolverMapValue, exists := barrelResolvedPaths.ResolveModuleName(resolvedPathKey, moduleName)
+				resolvedModulePath := moduleResolverMapValue.ModuleName
 				var newImportPath string
 				if exists {
 					newImportPath = joinCrossPlatformPaths(resolvedPathKey, resolvedModulePath)
@@ -154,11 +155,19 @@ func replaceBarrelImports(cmd *cobra.Command, config ReplaceConfig) int {
 					orderedImportPaths = append(orderedImportPaths, newImportPath)
 				}
 
+				if moduleResolverMapValue.Kind.IsNamespace() {
+					importName = fmt.Sprintf("* as %s", importName)
+				}
+				if moduleResolverMapValue.Kind.IsDefault() {
+					importName = fmt.Sprintf("default as %s", importName)
+				}
+
 				importsByModule[newImportPath] = append(importsByModule[newImportPath], importName)
 			}
 
 			for _, resolvedPath := range orderedImportPaths {
 				importNames := importsByModule[resolvedPath]
+				shouldReplacedImports := false
 				newImportStatement := "import "
 				isTypeImport := strings.HasPrefix(matches[1], "type {") || (len(importNames) == 1 && strings.Contains(importNames[0], "type "))
 				if isTypeImport {
@@ -168,6 +177,21 @@ func replaceBarrelImports(cmd *cobra.Command, config ReplaceConfig) int {
 				}
 
 				for _, importName := range importNames {
+					isDefaultImport := strings.HasPrefix(importName, "default as ")
+					if isDefaultImport {
+						isolateImportStatement := fmt.Sprintf(`import { %s } from %s%s%s%s`, importName, quoteSymbol, resolvedPath, quoteSymbol, endSymbol)
+						replacedImports = append(replacedImports, isolateImportStatement)
+						continue
+					}
+
+					isNamespaceImport := strings.HasPrefix(importName, "* as ")
+					if isNamespaceImport {
+						isolateImportStatement := fmt.Sprintf(`import %s from %s%s%s%s`, importName, quoteSymbol, resolvedPath, quoteSymbol, endSymbol)
+						replacedImports = append(replacedImports, isolateImportStatement)
+						continue
+					}
+
+					shouldReplacedImports = true
 					if isTypeImport {
 						class := getModuleName(importName)
 						newImportStatement += class + ", "
@@ -176,9 +200,11 @@ func replaceBarrelImports(cmd *cobra.Command, config ReplaceConfig) int {
 					}
 				}
 
-				newImportStatement = strings.TrimSuffix(newImportStatement, ", ")
-				newImportStatement += fmt.Sprintf(" } from %s%s%s%s", quoteSymbol, resolvedPath, quoteSymbol, endSymbol)
-				replacedImports = append(replacedImports, newImportStatement)
+				if shouldReplacedImports {
+					newImportStatement = strings.TrimSuffix(newImportStatement, ", ")
+					newImportStatement += fmt.Sprintf(" } from %s%s%s%s", quoteSymbol, resolvedPath, quoteSymbol, endSymbol)
+					replacedImports = append(replacedImports, newImportStatement)
+				}
 			}
 
 			if len(replacedImports) > 0 {
