@@ -138,7 +138,7 @@ func replaceBarrelImports(cmd *cobra.Command, config ReplaceConfig) int {
 				}
 				moduleName := getModuleName(importName)
 				moduleResolverMapValue, exists := barrelResolvedPaths.ResolveModuleName(resolvedPathKey, moduleName)
-				resolvedModulePath := moduleResolverMapValue.ModuleName
+				resolvedModulePath := moduleResolverMapValue.ModulePath
 				var newImportPath string
 				if exists {
 					newImportPath = joinCrossPlatformPaths(resolvedPathKey, resolvedModulePath)
@@ -157,9 +157,10 @@ func replaceBarrelImports(cmd *cobra.Command, config ReplaceConfig) int {
 
 				if moduleResolverMapValue.Kind.IsNamespace() {
 					importName = fmt.Sprintf("* as %s", importName)
-				}
-				if moduleResolverMapValue.Kind.IsDefault() {
+				} else if moduleResolverMapValue.Kind.IsDefault() {
 					importName = fmt.Sprintf("default as %s", importName)
+				} else if moduleResolverMapValue.Kind.IsRenamed() {
+					importName = fmt.Sprintf("%s as %s", moduleResolverMapValue.OriginModuleName, importName)
 				}
 
 				importsByModule[newImportPath] = append(importsByModule[newImportPath], importName)
