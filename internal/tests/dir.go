@@ -67,18 +67,18 @@ func CopyFile(src, dest string) error {
 }
 
 // CompareDirs compares the contents of two directories recursively
-func CompareDirs(t *testing.T, dir1, dir2 string) {
-	files1, err := os.ReadDir(dir1)
+func CompareDirs(t *testing.T, actualDir, expectedDir string) {
+	actualFile, err := os.ReadDir(actualDir)
 	assert.NoError(t, err)
 
-	files2, err := os.ReadDir(dir2)
+	expectedFile, err := os.ReadDir(expectedDir)
 	assert.NoError(t, err)
 
 	// Assert that the number of files is the same
-	assert.Len(t, files1, len(files2))
+	assert.Len(t, actualFile, len(expectedFile))
 
-	for i, file1 := range files1 {
-		file2 := files2[i]
+	for i, file1 := range actualFile {
+		file2 := expectedFile[i]
 
 		// Compare if file names match
 		assert.Equal(t, file1.Name(), file2.Name())
@@ -86,16 +86,16 @@ func CompareDirs(t *testing.T, dir1, dir2 string) {
 		// Compare if files are directories or files
 		if file1.IsDir() {
 			// Recursively compare subdirectories
-			CompareDirs(t, filepath.Join(dir1, file1.Name()), filepath.Join(dir2, file2.Name()))
+			CompareDirs(t, filepath.Join(actualDir, file1.Name()), filepath.Join(expectedDir, file2.Name()))
 		} else {
 			// Compare file content if it's a regular file
-			content1, err := os.ReadFile(filepath.Join(dir1, file1.Name()))
+			content1, err := os.ReadFile(filepath.Join(actualDir, file1.Name()))
 			assert.NoError(t, err)
 
-			content2, err := os.ReadFile(filepath.Join(dir2, file2.Name()))
+			content2, err := os.ReadFile(filepath.Join(expectedDir, file2.Name()))
 			assert.NoError(t, err)
 
-			assert.Equal(t, string(content1), string(content2))
+			assert.Equal(t, string(content2), string(content1))
 		}
 	}
 }

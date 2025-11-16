@@ -13,6 +13,10 @@ import {
   basicFunction as basicFunctionWithAs,
   basicFunction,
   type BasicType,
+  DefaultFunction,
+  DefaultObject,
+  RenamedDefaultFunction,
+  RenamedDefaultObject,
 } from "./barrel-basic";
 
 import { CircularA, CircularB } from './barrel-circular';

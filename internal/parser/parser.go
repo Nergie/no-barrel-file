@@ -13,15 +13,66 @@ import (
 
 var (
 	// export * from './module' || export * as ModuleName from './module' || export type { ModuleName } from './module' || export { ModuleName } from './module'
-	ExportLineWithPathRX = regexp.MustCompile(`(?i)export\s+(\*\s+from|\*\s+as\s+\w+\s+from|type\s+{[^}]+}\s+from|{[^}]+}\s+from)\s+['"]([^'"]+)['"]`)
-	// export default class ModuleName || export class ModuleName || export function ModuleName || export const ModuleName || export let ModuleName || export enum ModuleName || export type ModuleName || export interface ModuleName || export { ModuleName } || export type { ModuleName }
-	ExportLineWithModuleRX = regexp.MustCompile(`export\s+(?:default\s+)?(?:class|function|const|let|var|enum|type|interface)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)|\bexport\s+(?:type\s+)?\{[^}]*\b([a-zA-Z_$][a-zA-Z0-9_$]*)\b[^}]*\}`)
+	ExportLineWithPathRX  = regexp.MustCompile(`(?i)export\s+(\*\s+from|\*\s+as\s+\w+\s+from|type\s+({[^}]+})\s+from|({[^}]+})\s+from)\s+['"]([^'"]+)['"]`)
+	ExportLineWithRenamed = regexp.MustCompile(`.*\s+{[^}]+}\s+.*`)
+
+	// ExportLineWithModuleRX is a regular expression that matches TypeScript/JavaScript export statements
+	// and captures the exported identifier names and optional module paths.
+	//
+	// The regex matches the following export patterns:
+	//   - Named exports: export class/function/const/let/var/enum/type/interface <name>
+	//   - Default exports: export default class/function/const/let/var/enum/type/interface <name>
+	//   - Destructured exports: export { <name> } [from '<module>']
+	//   - Type-only exports: export type { <name> } [from '<module>']
+	//   - Namespace exports: export * as <name> [from '<module>']
+	//
+	// Capture groups:
+	//   1. Identifier name from direct exports (class, function, const, etc.)
+	//   2. Identifier name from destructured exports
+	//   3. Module path from destructured exports with 'from' clause
+	//   4. Namespace alias from 'export * as' statements
+	//   5. Module path from namespace exports with 'from' clause
+	ExportLineWithModuleRX = regexp.MustCompile(`\bexport\s+(?:default\s+)?(?:class|function|const|let|var|enum|type|interface)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)|\bexport\s+(?:type\s+)?\{[^}]*\b([a-zA-Z_$][a-zA-Z0-9_$]*)\b[^}]*\}\s*(?:from\s+['"]([^'"]+)['"])?|\bexport\s+\*\s+as\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\b\s*(?:from\s+['"]([^'"]+)['"])?`)
+
+	// ExportAliasRX = regexp.MustCompile(`\bexport\s+(?:type\s+)?\{\s*(\w+)\s+as\s+\w+\b[^}]*\}\s*(?:from\s+['"](?:[^'"]+)['"])?`) // exportName as Alias
+	ExportAliasRX = regexp.MustCompile(`\bexport\s+(?:type\s+)?\{\s*(\w+)\s+as\s+\w+\b[^}]*\}\s*(?:from\s+['"]([^'"]+)['"])?`) // exportName as Alias
+
+	// This regex is used to identify default module exports in JavaScript/TypeScript files.
+	ExportLineWithDefaultModuleRX = regexp.MustCompile(`.+\s*(default)\s+.+`)
 )
 
 type Parser struct {
 	ignorer    ignorer.Ignorer
 	rootPath   string
 	extensions []string
+}
+
+type ExportKind int
+
+func (exportKind *ExportKind) IsDefault() bool {
+	return *exportKind == KindDefault
+}
+
+func (exportKind *ExportKind) IsNamespace() bool {
+	return *exportKind == KindNamespace
+}
+
+func (exportKind *ExportKind) IsRenamed() bool {
+	return *exportKind == KindRenamed
+}
+
+const (
+	KindDeclaration ExportKind = iota // class/function/const/...
+	KindDefault                       // export default ...
+	KindNamed                         // export { Foo }
+	KindRenamed                       // export { Foo as Bar }
+	KindNamespace                     // export * as ns from ...
+)
+
+type ModuleResolverMapValue struct {
+	Kind             ExportKind
+	OriginModuleName string
+	ModulePath       string
 }
 
 func New(rootPath string, ignorer ignorer.Ignorer, extensions []string) Parser {
@@ -59,10 +110,10 @@ func (parser *Parser) BarrelFilePaths() []string {
 	return barrelFilePaths
 }
 
-func (parser *Parser) BarrelMaps(resolver resolver.Resolver) (map[string]struct{}, map[string]string) {
+func (parser *Parser) BarrelMaps(resolver resolver.Resolver) (map[string]struct{}, map[string]ModuleResolverMapValue) {
 	barrelDirsWithModulePaths := parser.getBarrelDirsWithModulePaths()
 	barrelPathExistenceMap := make(map[string]struct{})
-	barrelModuleResolverMap := make(map[string]string)
+	barrelModuleResolverMap := make(map[string]ModuleResolverMapValue)
 	for barrelDir, modulePaths := range barrelDirsWithModulePaths {
 		barrelDirAlias := resolver.AliasPath(barrelDir)
 		for _, modulePath := range modulePaths {
@@ -84,17 +135,45 @@ func (parser *Parser) BarrelMaps(resolver resolver.Resolver) (map[string]struct{
 						barrelPathExistenceMap[barrelDir] = struct{}{}
 
 						moduleName := match[1]
-						if moduleName == "" && len(match) > 2 {
+						exportKind := KindDeclaration
+						if moduleName == "" {
 							moduleName = match[2]
+							exportKind = KindNamed
 						}
+						if moduleName == "" {
+							moduleName = match[4]
+							exportKind = KindNamespace
+						} else if ExportLineWithDefaultModuleRX.MatchString(match[0]) {
+							exportKind = KindDefault
+						}
+
+						if match[3] != "" {
+							modulePath = match[3]
+							parts := strings.Split(moduleName, " as ")
+							if len(parts) == 2 {
+								moduleName = strings.TrimSpace(parts[1])
+							}
+						} else if match[5] != "" {
+							modulePath = match[5]
+						}
+
+						moduleNameBeforeRenaming := getModuleNameBeforeRenaming(exportKind, match[0], path, parser.extensions)
+						if moduleNameBeforeRenaming != "" {
+							exportKind = KindRenamed
+						}
+
 						aliasKey := filepath.Join(barrelDirAlias.FullPath, moduleName)
 						directKey := filepath.Join(barrelDir, moduleName)
 						moduleExtension := filepath.Ext(modulePath)
 						modulePathWithoutExtension := modulePath[0 : len(modulePath)-len(moduleExtension)]
-						aliasValue := filepath.Join(modulePathWithoutExtension)
-						directValue := filepath.Join(modulePathWithoutExtension)
-						barrelModuleResolverMap[aliasKey] = aliasValue
-						barrelModuleResolverMap[directKey] = directValue
+						barrelModuleResolverMapValue := ModuleResolverMapValue{
+							Kind:             exportKind,
+							OriginModuleName: moduleNameBeforeRenaming,
+							ModulePath:       filepath.Join(modulePathWithoutExtension),
+						}
+
+						barrelModuleResolverMap[aliasKey] = barrelModuleResolverMapValue
+						barrelModuleResolverMap[directKey] = barrelModuleResolverMapValue
 					}
 				}
 				return nil
@@ -102,7 +181,45 @@ func (parser *Parser) BarrelMaps(resolver resolver.Resolver) (map[string]struct{
 		}
 	}
 
+	handleNestedBarrelModules(&barrelModuleResolverMap)
+
 	return barrelPathExistenceMap, barrelModuleResolverMap
+}
+
+func getModuleNameBeforeRenaming(exportKind ExportKind, exportLine string, filePath string, extensions []string) string {
+	moduleNameBeforeRenaming := ""
+	if exportKind == KindNamed && isIndexFile(filePath, extensions) {
+		matches := ExportAliasRX.FindAllStringSubmatch(exportLine, -1)
+		if len(matches) >= 1 {
+			moduleNameBeforeRenaming = matches[0][1]
+		}
+	}
+
+	return moduleNameBeforeRenaming
+}
+
+func handleNestedBarrelModules(barrelModuleResolverMap *map[string]ModuleResolverMapValue) {
+	for barrelDirWithModuleName, barrelModuleResolverMapValue := range *barrelModuleResolverMap {
+		(*barrelModuleResolverMap)[barrelDirWithModuleName] = getBarrelModuleResolverMapValue(barrelModuleResolverMap, barrelDirWithModuleName, barrelModuleResolverMapValue)
+	}
+}
+
+func getBarrelModuleResolverMapValue(barrelModuleResolverMap *map[string]ModuleResolverMapValue, barrelDirWithModuleName string, currentBarrelModuleResolverMapValue ModuleResolverMapValue) ModuleResolverMapValue {
+	visitedDirs := map[string]struct{}{}
+
+	for currentBarrelModuleResolverMapValue.Kind.IsRenamed() {
+		newBarrelDirWithModuleName := filepath.Join(filepath.Dir(barrelDirWithModuleName), currentBarrelModuleResolverMapValue.ModulePath, currentBarrelModuleResolverMapValue.OriginModuleName)
+		_, isVisited := visitedDirs[newBarrelDirWithModuleName]
+		if newBarrelModuleResolverMapValue, exists := (*barrelModuleResolverMap)[newBarrelDirWithModuleName]; exists && !isVisited {
+			newBarrelModuleResolverMapValue.ModulePath = filepath.Join(currentBarrelModuleResolverMapValue.ModulePath, newBarrelModuleResolverMapValue.ModulePath)
+			currentBarrelModuleResolverMapValue = newBarrelModuleResolverMapValue
+			visitedDirs[newBarrelDirWithModuleName] = struct{}{}
+		} else {
+			break
+		}
+	}
+
+	return currentBarrelModuleResolverMapValue
 }
 
 func (parser *Parser) IsSupportedFileExtension(path string) bool {
@@ -154,7 +271,11 @@ func getBarrelModulePaths(filePath string, extensions []string) []string {
 	matches := ExportLineWithPathRX.FindAllStringSubmatch(string(content), -1)
 	for _, match := range matches {
 		if len(match) > 1 {
-			modulePath := match[2]
+			isNamedExport := match[3] != ""
+			if isNamedExport {
+				modulePaths = append(modulePaths, filepath.Base(filePath))
+			}
+			modulePath := match[4]
 			path := filepath.Join(filepath.Dir(filePath), modulePath)
 			if info, err := os.Stat(path); err == nil {
 				if info.IsDir() {

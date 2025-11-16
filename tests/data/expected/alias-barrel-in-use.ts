@@ -5,6 +5,10 @@ import { BasicEnum } from "@barrel-basic/enums";
 import { BasicInterface, type BasicType } from "@barrel-basic/types";
 import { ReExportedBasicConstToExport, ReExportedBasicType, RenamedBasicClass } from "@barrel-basic/re-exports";
 import { basicFunction as basicFunctionWithAs, basicFunction } from "@barrel-basic/functions";
+import * as DefaultFunction from "@barrel-basic/default-function";
+import { default as RenamedDefaultFunction } from "@barrel-basic/default-function";
+import * as DefaultObject from "@barrel-basic/default-object";
+import { default as RenamedDefaultObject } from "@barrel-basic/default-object";
 
 import { CircularA } from '@barrel-circular/circular-a';
 import { CircularB } from '@barrel-circular/circular-b';
