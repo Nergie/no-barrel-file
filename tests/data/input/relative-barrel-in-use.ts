@@ -17,6 +17,13 @@ import {
   DefaultObject,
   RenamedDefaultFunction,
   RenamedDefaultObject,
+  AbstractService,
+  ConstEnum,
+  DECLARED_CONST,
+  DeclaredClass,
+  asyncFunction,
+  generatorFunction,
+  DefaultAbstractClass,
 } from "./barrel-basic";
 
 import { CircularA, CircularB } from './barrel-circular';

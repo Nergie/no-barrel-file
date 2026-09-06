@@ -22,6 +22,11 @@ var (
 	// The regex matches the following export patterns:
 	//   - Named exports: export class/function/const/let/var/enum/type/interface <name>
 	//   - Default exports: export default class/function/const/let/var/enum/type/interface <name>
+	//   - Modified declarations: zero or more of the abstract, declare and async modifiers,
+	//     placed after any default (e.g. export default abstract class <name>). The regex is
+	//     deliberately permissive here and does not reject combinations TypeScript forbids.
+	//   - Generator functions: export function* <name>
+	//   - Constant enums: export const enum <name>
 	//   - Destructured exports: export { <name> } [from '<module>']
 	//   - Type-only exports: export type { <name> } [from '<module>']
 	//   - Namespace exports: export * as <name> [from '<module>']
@@ -32,7 +37,11 @@ var (
 	//   3. Module path from destructured exports with 'from' clause
 	//   4. Namespace alias from 'export * as' statements
 	//   5. Module path from namespace exports with 'from' clause
-	ExportLineWithModuleRX = regexp.MustCompile(`\bexport\s+(?:default\s+)?(?:class|function|const|let|var|enum|type|interface)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)|\bexport\s+(?:type\s+)?\{[^}]*\b([a-zA-Z_$][a-zA-Z0-9_$]*)\b[^}]*\}\s*(?:from\s+['"]([^'"]+)['"])?|\bexport\s+\*\s+as\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\b\s*(?:from\s+['"]([^'"]+)['"])?`)
+	// The order of the declaration keyword branches is load-bearing: const enum must precede
+	// const (otherwise "export const enum Color" captures the name "enum") and function* must
+	// precede function. Each branch carries its own trailing separator so that the star in
+	// "function *gen" can absorb the space while "const" still requires one.
+	ExportLineWithModuleRX = regexp.MustCompile(`\bexport\s+(?:default\s+)?(?:(?:abstract|declare|async)\s+)*(?:class\s+|function\s*\*\s*|function\s+|const\s+enum\s+|const\s+|let\s+|var\s+|enum\s+|type\s+|interface\s+)([a-zA-Z_$][a-zA-Z0-9_$]*)|\bexport\s+(?:type\s+)?\{[^}]*\b([a-zA-Z_$][a-zA-Z0-9_$]*)\b[^}]*\}\s*(?:from\s+['"]([^'"]+)['"])?|\bexport\s+\*\s+as\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\b\s*(?:from\s+['"]([^'"]+)['"])?`)
 
 	// ExportAliasRX = regexp.MustCompile(`\bexport\s+(?:type\s+)?\{\s*(\w+)\s+as\s+\w+\b[^}]*\}\s*(?:from\s+['"](?:[^'"]+)['"])?`) // exportName as Alias
 	ExportAliasRX = regexp.MustCompile(`\bexport\s+(?:type\s+)?\{\s*(\w+)\s+as\s+\w+\b[^}]*\}\s*(?:from\s+['"]([^'"]+)['"])?`) // exportName as Alias
