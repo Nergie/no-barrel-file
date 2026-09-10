@@ -32,3 +32,8 @@ go.work.sum
 # MacOs
 .DS_Store
 .vscode
+
+# agent tooling
+.agents/
+.claude/
+skills-lock.json
