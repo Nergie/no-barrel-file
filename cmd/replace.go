@@ -130,6 +130,10 @@ func replaceBarrelImports(cmd *cobra.Command, config ReplaceConfig) int {
 			replacedImports := []string{}
 			importsByModule := make(map[string][]string)
 			orderedImportPaths := []string{}
+			// Tracks whether at least one imported name mapped to a module inside the barrel.
+			// When nothing resolves the statement is returned untouched, so that imports the
+			// barrel does not actually export are not reformatted for no reason.
+			resolvedAnyImport := false
 
 			for _, importName := range importNames {
 				importName = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(importName, "{"), "}"))
@@ -141,6 +145,7 @@ func replaceBarrelImports(cmd *cobra.Command, config ReplaceConfig) int {
 				resolvedModulePath := moduleResolverMapValue.ModulePath
 				var newImportPath string
 				if exists {
+					resolvedAnyImport = true
 					newImportPath = joinCrossPlatformPaths(resolvedPathKey, resolvedModulePath)
 					if !isAliasPath {
 						newImportPath = joinCrossPlatformPaths(importPath, resolvedModulePath)
@@ -164,6 +169,10 @@ func replaceBarrelImports(cmd *cobra.Command, config ReplaceConfig) int {
 				}
 
 				importsByModule[newImportPath] = append(importsByModule[newImportPath], importName)
+			}
+
+			if !resolvedAnyImport {
+				return importStatement
 			}
 
 			for _, resolvedPath := range orderedImportPaths {
