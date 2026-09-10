@@ -70,12 +70,21 @@ func (exportKind *ExportKind) IsRenamed() bool {
 	return *exportKind == KindRenamed
 }
 
+func (exportKind *ExportKind) IsReExport() bool {
+	return *exportKind == KindReExport
+}
+
+func (exportKind *ExportKind) IsChainable() bool {
+	return exportKind.IsRenamed() || exportKind.IsReExport()
+}
+
 const (
 	KindDeclaration ExportKind = iota // class/function/const/...
 	KindDefault                       // export default ...
 	KindNamed                         // export { Foo }
 	KindRenamed                       // export { Foo as Bar }
 	KindNamespace                     // export * as ns from ...
+	KindReExport                      // export { Foo } from './other'
 )
 
 type ModuleResolverMapValue struct {
@@ -156,25 +165,29 @@ func (parser *Parser) BarrelMaps(resolver resolver.Resolver) (map[string]struct{
 							exportKind = KindDefault
 						}
 
+						exportModulePath := modulePath
 						if match[3] != "" {
-							modulePath = match[3]
+							exportModulePath = normalizeIndexModulePath(filepath.Dir(path), match[3], parser.extensions, barrelDirsWithModulePaths)
 							parts := strings.Split(moduleName, " as ")
 							if len(parts) == 2 {
 								moduleName = strings.TrimSpace(parts[1])
 							}
 						} else if match[5] != "" {
-							modulePath = match[5]
+							exportModulePath = normalizeIndexModulePath(filepath.Dir(path), match[5], parser.extensions, barrelDirsWithModulePaths)
 						}
 
 						moduleNameBeforeRenaming := getModuleNameBeforeRenaming(exportKind, match[0], path, parser.extensions)
 						if moduleNameBeforeRenaming != "" {
 							exportKind = KindRenamed
+						} else if exportKind == KindNamed && match[3] != "" && isIndexFile(path, parser.extensions) {
+							exportKind = KindReExport
+							moduleNameBeforeRenaming = moduleName
 						}
 
 						aliasKey := filepath.Join(barrelDirAlias.FullPath, moduleName)
 						directKey := filepath.Join(barrelDir, moduleName)
-						moduleExtension := filepath.Ext(modulePath)
-						modulePathWithoutExtension := modulePath[0 : len(modulePath)-len(moduleExtension)]
+						moduleExtension := filepath.Ext(exportModulePath)
+						modulePathWithoutExtension := exportModulePath[0 : len(exportModulePath)-len(moduleExtension)]
 						barrelModuleResolverMapValue := ModuleResolverMapValue{
 							Kind:             exportKind,
 							OriginModuleName: moduleNameBeforeRenaming,
@@ -214,25 +227,33 @@ func handleNestedBarrelModules(barrelModuleResolverMap *map[string]ModuleResolve
 }
 
 func getBarrelModuleResolverMapValue(barrelModuleResolverMap *map[string]ModuleResolverMapValue, barrelDirWithModuleName string, currentBarrelModuleResolverMapValue ModuleResolverMapValue) ModuleResolverMapValue {
-	visitedDirs := map[string]struct{}{}
+	visitedDirs := map[string]struct{}{barrelDirWithModuleName: {}}
 
-	for currentBarrelModuleResolverMapValue.Kind.IsRenamed() {
+	for currentBarrelModuleResolverMapValue.Kind.IsChainable() {
 		newBarrelDirWithModuleName := filepath.Join(filepath.Dir(barrelDirWithModuleName), currentBarrelModuleResolverMapValue.ModulePath, currentBarrelModuleResolverMapValue.OriginModuleName)
-		_, isVisited := visitedDirs[newBarrelDirWithModuleName]
-		if newBarrelModuleResolverMapValue, exists := (*barrelModuleResolverMap)[newBarrelDirWithModuleName]; exists && !isVisited {
-			newBarrelModuleResolverMapValue.ModulePath = filepath.Join(currentBarrelModuleResolverMapValue.ModulePath, newBarrelModuleResolverMapValue.ModulePath)
-			currentBarrelModuleResolverMapValue = newBarrelModuleResolverMapValue
-			visitedDirs[newBarrelDirWithModuleName] = struct{}{}
-		} else {
+		if _, isVisited := visitedDirs[newBarrelDirWithModuleName]; isVisited {
 			break
 		}
+		visitedDirs[newBarrelDirWithModuleName] = struct{}{}
+
+		newBarrelModuleResolverMapValue, exists := (*barrelModuleResolverMap)[newBarrelDirWithModuleName]
+		if !exists {
+			break
+		}
+
+		newBarrelModuleResolverMapValue.ModulePath = filepath.Join(currentBarrelModuleResolverMapValue.ModulePath, newBarrelModuleResolverMapValue.ModulePath)
+		currentBarrelModuleResolverMapValue = newBarrelModuleResolverMapValue
 	}
 
 	return currentBarrelModuleResolverMapValue
 }
 
 func (parser *Parser) IsSupportedFileExtension(path string) bool {
-	for _, ext := range parser.extensions {
+	return isSupportedFileExtension(path, parser.extensions)
+}
+
+func isSupportedFileExtension(path string, extensions []string) bool {
+	for _, ext := range extensions {
 		if strings.HasSuffix(path, ext) {
 			return true
 		}
@@ -265,6 +286,7 @@ func (parser *Parser) getBarrelDirsWithModulePaths() map[string][]string {
 		}
 		return nil
 	})
+	normalizeIndexModulePaths(&barrelDirsWithModulePaths, parser.extensions)
 	handleNestedBarrels(&barrelDirsWithModulePaths)
 	return barrelDirsWithModulePaths
 }
@@ -287,7 +309,9 @@ func getBarrelModulePaths(filePath string, extensions []string) []string {
 			modulePath := match[4]
 			path := filepath.Join(filepath.Dir(filePath), modulePath)
 			if info, err := os.Stat(path); err == nil {
-				if info.IsDir() {
+				// The second case is a re-export that spells out the extension
+				// ("./module.ts"), so the path already resolves without one being appended.
+				if info.IsDir() || isSupportedFileExtension(path, extensions) {
 					modulePaths = append(modulePaths, filepath.ToSlash(modulePath))
 				}
 			} else {
@@ -303,6 +327,38 @@ func getBarrelModulePaths(filePath string, extensions []string) []string {
 	}
 
 	return modulePaths
+}
+
+func normalizeIndexModulePath(sourceDir string, modulePath string, extensions []string, barrelDirsWithModulePaths map[string][]string) string {
+	if !isIndexFile(modulePath, extensions) && filepath.Base(modulePath) != "index" {
+		return modulePath
+	}
+
+	fullPath := filepath.Join(sourceDir, modulePath)
+	if info, err := os.Stat(fullPath); err == nil && info.IsDir() {
+		return modulePath
+	}
+
+	moduleDir := filepath.ToSlash(filepath.Dir(modulePath))
+	if moduleDir == "." {
+		return modulePath
+	}
+
+	if _, isBarrel := barrelDirsWithModulePaths[filepath.ToSlash(filepath.Join(sourceDir, moduleDir))]; !isBarrel {
+		return modulePath
+	}
+
+	return moduleDir
+}
+
+func normalizeIndexModulePaths(barrelDirsWithModulePaths *map[string][]string, extensions []string) {
+	for dir, modulePaths := range *barrelDirsWithModulePaths {
+		normalizedModulePaths := make([]string, 0, len(modulePaths))
+		for _, modulePath := range modulePaths {
+			normalizedModulePaths = append(normalizedModulePaths, normalizeIndexModulePath(dir, modulePath, extensions, *barrelDirsWithModulePaths))
+		}
+		(*barrelDirsWithModulePaths)[dir] = normalizedModulePaths
+	}
 }
 
 func isIndexFile(path string, extensions []string) bool {

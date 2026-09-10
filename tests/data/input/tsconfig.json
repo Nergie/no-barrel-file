@@ -7,6 +7,8 @@
       "dom"
     ],
     "paths": {
+      "@barrel-index-suffix": ["./barrel-index-suffix/index.ts"],
+      "@barrel-index-suffix/*": ["./barrel-index-suffix/*"],
       "@barrel-basic/*": ["./barrel-basic/*"],
       "@barrel-circular/*": ["./barrel-circular/*"],
       "@barrel-nested/*": ["./barrel-nested/*"],
