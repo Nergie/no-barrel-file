@@ -50,10 +50,6 @@ var (
 	ExportLineWithDefaultModuleRX = regexp.MustCompile(`.+\s*(default)\s+.+`)
 )
 
-// maxResolveHops caps how many re-export hops are followed when resolving a module name
-// back to the file that declares it.
-const maxResolveHops = 32
-
 type Parser struct {
 	ignorer    ignorer.Ignorer
 	rootPath   string
@@ -78,8 +74,6 @@ func (exportKind *ExportKind) IsReExport() bool {
 	return *exportKind == KindReExport
 }
 
-// IsChainable reports whether the export forwards a name declared in another module,
-// and so can be followed to the module that actually declares it.
 func (exportKind *ExportKind) IsChainable() bool {
 	return exportKind.IsRenamed() || exportKind.IsReExport()
 }
@@ -171,38 +165,29 @@ func (parser *Parser) BarrelMaps(resolver resolver.Resolver) (map[string]struct{
 							exportKind = KindDefault
 						}
 
-						// Shadow the enclosing loop variable: an export line carrying its own
-						// module path must not leak that path into the next iteration, and the
-						// absence of a path here means "no from clause", not "reuse the last one".
-						modulePath := modulePath
+						exportModulePath := modulePath
 						if match[3] != "" {
-							modulePath = normalizeIndexModulePath(filepath.Dir(path), match[3], parser.extensions, barrelDirsWithModulePaths)
+							exportModulePath = normalizeIndexModulePath(filepath.Dir(path), match[3], parser.extensions, barrelDirsWithModulePaths)
 							parts := strings.Split(moduleName, " as ")
 							if len(parts) == 2 {
 								moduleName = strings.TrimSpace(parts[1])
 							}
 						} else if match[5] != "" {
-							modulePath = normalizeIndexModulePath(filepath.Dir(path), match[5], parser.extensions, barrelDirsWithModulePaths)
+							exportModulePath = normalizeIndexModulePath(filepath.Dir(path), match[5], parser.extensions, barrelDirsWithModulePaths)
 						}
 
 						moduleNameBeforeRenaming := getModuleNameBeforeRenaming(exportKind, match[0], path, parser.extensions)
 						if moduleNameBeforeRenaming != "" {
 							exportKind = KindRenamed
 						} else if exportKind == KindNamed && match[3] != "" && isIndexFile(path, parser.extensions) {
-							// `export { Foo } from './other'` forwards a name declared elsewhere,
-							// so it can be followed to the declaring module exactly like the
-							// renamed form. `export { Foo };` carries no module path and must not
-							// be followed -- the two are otherwise indistinguishable here, which
-							// is why the kind is decided by the presence of match[3] rather than
-							// by ModulePath being non-empty.
 							exportKind = KindReExport
 							moduleNameBeforeRenaming = moduleName
 						}
 
 						aliasKey := filepath.Join(barrelDirAlias.FullPath, moduleName)
 						directKey := filepath.Join(barrelDir, moduleName)
-						moduleExtension := filepath.Ext(modulePath)
-						modulePathWithoutExtension := modulePath[0 : len(modulePath)-len(moduleExtension)]
+						moduleExtension := filepath.Ext(exportModulePath)
+						modulePathWithoutExtension := exportModulePath[0 : len(exportModulePath)-len(moduleExtension)]
 						barrelModuleResolverMapValue := ModuleResolverMapValue{
 							Kind:             exportKind,
 							OriginModuleName: moduleNameBeforeRenaming,
@@ -242,13 +227,9 @@ func handleNestedBarrelModules(barrelModuleResolverMap *map[string]ModuleResolve
 }
 
 func getBarrelModuleResolverMapValue(barrelModuleResolverMap *map[string]ModuleResolverMapValue, barrelDirWithModuleName string, currentBarrelModuleResolverMapValue ModuleResolverMapValue) ModuleResolverMapValue {
-	// Seed with the starting key and mark before hopping, so that a re-export pointing at
-	// its own barrel (`export { Foo } from '.'`) is caught on the first hop rather than
-	// after taking it. maxResolveHops is a backstop for any cycle the key-based guard
-	// cannot see; stopping there leaves the value unresolved rather than half-resolved.
 	visitedDirs := map[string]struct{}{barrelDirWithModuleName: {}}
 
-	for hop := 0; currentBarrelModuleResolverMapValue.Kind.IsChainable() && hop < maxResolveHops; hop++ {
+	for currentBarrelModuleResolverMapValue.Kind.IsChainable() {
 		newBarrelDirWithModuleName := filepath.Join(filepath.Dir(barrelDirWithModuleName), currentBarrelModuleResolverMapValue.ModulePath, currentBarrelModuleResolverMapValue.OriginModuleName)
 		if _, isVisited := visitedDirs[newBarrelDirWithModuleName]; isVisited {
 			break
@@ -260,10 +241,6 @@ func getBarrelModuleResolverMapValue(barrelModuleResolverMap *map[string]ModuleR
 			break
 		}
 
-		// The declaring site wins: a chain landing on a default or namespace export has to
-		// carry that kind back, otherwise the emitted import names a binding that does not
-		// exist. ModulePath accumulates across hops; OriginModuleName comes from the hop we
-		// just took and is meaningless once the chain reaches a plain declaration.
 		newBarrelModuleResolverMapValue.ModulePath = filepath.Join(currentBarrelModuleResolverMapValue.ModulePath, newBarrelModuleResolverMapValue.ModulePath)
 		currentBarrelModuleResolverMapValue = newBarrelModuleResolverMapValue
 	}
@@ -332,11 +309,9 @@ func getBarrelModulePaths(filePath string, extensions []string) []string {
 			modulePath := match[4]
 			path := filepath.Join(filepath.Dir(filePath), modulePath)
 			if info, err := os.Stat(path); err == nil {
-				if info.IsDir() {
-					modulePaths = append(modulePaths, filepath.ToSlash(modulePath))
-				} else if isSupportedFileExtension(path, extensions) {
-					// The re-export spells out the extension ("./module.ts"), so the path
-					// already resolves without one being appended.
+				// The second case is a re-export that spells out the extension
+				// ("./module.ts"), so the path already resolves without one being appended.
+				if info.IsDir() || isSupportedFileExtension(path, extensions) {
 					modulePaths = append(modulePaths, filepath.ToSlash(modulePath))
 				}
 			} else {
@@ -354,24 +329,6 @@ func getBarrelModulePaths(filePath string, extensions []string) []string {
 	return modulePaths
 }
 
-// normalizeIndexModulePath rewrites a re-export path that points at a barrel's index file
-// ("./services/index", "./services/index.ts") into the directory holding it ("./services"),
-// so that from here on it is indistinguishable from the directory form. Without this a
-// re-export written with an explicit /index suffix is recorded as a leaf module, the
-// flattening in handleNestedBarrels never sees it, and none of the barrel's modules resolve.
-// The importing side already strips /index in cmd.normalizeImportPath; this is the same
-// normalisation applied to the exporting side.
-//
-// Two guards apply, and both matter:
-//
-//   - A directory literally named "index" keeps pointing at itself. Only a path that
-//     resolves to a *file* is rewritten, so "./index/index" collapses to "./index" and
-//     stops there rather than collapsing again to the barrel's own directory.
-//
-//   - The resulting directory must itself be a known barrel. An index.ts that merely holds
-//     declarations is not a barrel, and rewriting toward its directory would widen
-//     resolution to every symbol underneath it, including ones no barrel re-exports --
-//     turning a path that fails to resolve into one that resolves to a broken import.
 func normalizeIndexModulePath(sourceDir string, modulePath string, extensions []string, barrelDirsWithModulePaths map[string][]string) string {
 	if !isIndexFile(modulePath, extensions) && filepath.Base(modulePath) != "index" {
 		return modulePath
@@ -384,10 +341,6 @@ func normalizeIndexModulePath(sourceDir string, modulePath string, extensions []
 
 	moduleDir := filepath.ToSlash(filepath.Dir(modulePath))
 	if moduleDir == "." {
-		// The barrel's own index file, either self-referenced or recorded by
-		// getBarrelModulePaths so that named re-exports get scanned. Collapsing it to the
-		// barrel directory would make the flattening treat it as an already-visited barrel
-		// and drop it, taking every name the barrel re-exports directly with it.
 		return modulePath
 	}
 
@@ -398,9 +351,6 @@ func normalizeIndexModulePath(sourceDir string, modulePath string, extensions []
 	return moduleDir
 }
 
-// normalizeIndexModulePaths runs normalizeIndexModulePath across every collected barrel.
-// It has to run after the walk that builds barrelDirsWithModulePaths has finished, because
-// the "is the target a known barrel" guard needs the completed set of barrel directories.
 func normalizeIndexModulePaths(barrelDirsWithModulePaths *map[string][]string, extensions []string) {
 	for dir, modulePaths := range *barrelDirsWithModulePaths {
 		normalizedModulePaths := make([]string, 0, len(modulePaths))
